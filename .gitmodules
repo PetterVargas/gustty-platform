@@ -1,0 +1,9 @@
+[submodule "gustty"]
+	path = gustty
+	url = https://github.com/PetterVargas/gustty.git
+[submodule "gustty-dashboard"]
+	path = gustty-dashboard
+	url = https://github.com/PetterVargas/gustty-dashboard.git
+[submodule "gustty-storefront"]
+	path = gustty-storefront
+	url = https://github.com/PetterVargas/gustty-storefront.git
