@@ -8,7 +8,7 @@ Todos los servicios de Gustty comenzaron desde un único repositorio
 1. [Docker](https://docs.docker.com/install/)
 2. [Docker Compose](https://docs.docker.com/compose/install/)
 
-## How to run it?
+## ¿Cómo ejecutarlo?
 1. Clone el repositorio:
 
 ```
