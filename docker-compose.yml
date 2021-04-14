@@ -1,0 +1,144 @@
+#docker-compose -f home/peter/gustty-platform/docker-compose.yml up
+version: '3'
+
+services:
+    api:
+        ports:
+            # Se define el puerto del servicio y el puerto de la máquina anfitriona.
+            - 8000:8000
+        build:
+            # Contexto es el Path.
+            context: ./gustty
+            dockerfile: ./Dockerfile
+            args:
+                # Declaración de variables en tiempo de ejecución.
+                STATIC_URL: '/static/'
+        # Reinicia el servicio en caso de que se detenga
+        restart: unless-stopped
+        networks:
+            # Red creada para la conexión de servidores
+            - gustty-backend-tier
+        depends_on:
+            # La creación de este servicio depende de estos otros, por ellos los crea primero.
+            - db
+            - redis
+            - jaeger
+        volumes:
+            # Almacenamiento de los contenedores.
+            - ./gustty/gustty/:/app/gustty:Z
+            - ./gustty/templates/:/app/templates:Z
+            - ./gustty/tests/:/app/tests
+            # Volumen compartido entre worker y api para media.
+            - gustty-media:/app/media
+        # Ejecución de Django.
+        command: python manage.py runserver 0.0.0.0:8000
+        # Archivo de entorno.
+        env_file: common.env
+        environment:
+            # Variables de entorno
+            - JAEGER_AGENT_HOST=jaeger
+            - STOREFRONT_URL=http://localhost:3000/
+            - DASHBOARD_URL=http://localhost:9000/
+  
+    storefront:
+      build:
+        context: ./gustty-storefront
+        dockerfile: ./Dockerfile.dev
+      ports:
+        - 3000:3000
+      restart: unless-stopped
+      volumes:
+        - ./gustty-storefront/:/app:cached
+        - /app/node_modules/
+      command: npm start -- --host 0.0.0.0
+  
+    dashboard:
+      build:
+        context: ./gustty-dashboard
+        dockerfile: ./Dockerfile.dev
+      ports:
+        - 9000:9000
+      restart: unless-stopped
+      volumes:
+        - ./gustty-dashboard/:/app:cached
+        - /app/node_modules/
+      command: npm start -- --host 0.0.0.0
+  
+    db:
+      image: library/postgres:11.1-alpine
+      ports:
+        - 5432:5432
+      restart: unless-stopped
+      networks:
+        - gustty-backend-tier
+      volumes:
+        - gustty-db:/var/lib/postgresql/data
+      environment:
+        - POSTGRES_USER=gustty
+        - POSTGRES_PASSWORD=gustty
+  
+    redis:
+      image: library/redis:5.0-alpine
+      ports:
+        - 6379:6379
+      restart: unless-stopped
+      networks:
+        - gustty-backend-tier
+      volumes:
+        - gustty-redis:/data
+  
+    worker:
+      build:
+        context: ./gustty
+        dockerfile: ./Dockerfile
+        args:
+          STATIC_URL: '/static/'
+      command: celery -A gustty worker --app=gustty.celeryconf:app --loglevel=info
+      restart: unless-stopped
+      networks:
+        - gustty-backend-tier
+      env_file: common.env
+      depends_on:
+        - redis
+        - mailhog
+      volumes:
+        - ./gustty/gustty/:/app/gustty:Z,cached
+        - ./gustty/templates/:/app/templates:Z,cached
+        # Volume compartido entre worker and api para archivos media
+        - gustty-media:/app/media
+      environment:
+        - EMAIL_URL=smtp://mailhog:1025
+  
+    jaeger:
+      image: jaegertracing/all-in-one
+      ports:
+        - "5775:5775/udp"
+        - "6831:6831/udp"
+        - "6832:6832/udp"
+        - "5778:5778"
+        - "16686:16686"
+        - "14268:14268"
+        - "9411:9411"
+      restart: unless-stopped
+      networks:
+        - gustty-backend-tier
+  
+    mailhog:
+      image: mailhog/mailhog
+      ports: 
+        - 1025:1025 # Server SMTP
+        - 8025:8025 # Interfaz de usuario web. Visite http://localhost:8025/ para validar emails.
+      restart: unless-stopped
+      networks:
+        - gustty-backend-tier
+  
+volumes:
+  gustty-db:
+    driver: local
+  gustty-redis:
+    driver: local
+  gustty-media:
+  
+networks:
+  gustty-backend-tier:
+    driver: bridge
